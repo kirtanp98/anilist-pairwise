@@ -1,7 +1,6 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import {
   getServerSession,
-  type DefaultSession,
   type NextAuthOptions,
 } from "next-auth";
 import { type Adapter } from "next-auth/adapters";
@@ -22,20 +21,6 @@ import {
  *
  * @see https://next-auth.js.org/getting-started/typescript#module-augmentation
  */
-declare module "next-auth" {
-  interface Session extends DefaultSession {
-    user: {
-      id: string;
-      // ...other properties
-      // role: UserRole;
-    } & DefaultSession["user"];
-  }
-
-  // interface User {
-  //   // ...other properties
-  //   // role: UserRole;
-  // }
-}
 
 /**
  * Options for NextAuth.js used to configure adapters, providers, callbacks, etc.
@@ -43,21 +28,12 @@ declare module "next-auth" {
  * @see https://next-auth.js.org/configuration/options
  */
 export const authOptions: NextAuthOptions = {
-  callbacks: {
-    session: ({ session, user }) => ({
-      ...session,
-      user: {
-        ...session.user,
-        id: user.id,
-      },
-    }),
-  },
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  }) as Adapter,
+  // adapter: DrizzleAdapter(db, {
+  //   usersTable: users,
+  //   accountsTable: accounts,
+  //   sessionsTable: sessions,
+  //   verificationTokensTable: verificationTokens,
+  // }) as Adapter,
   providers: [
     /**
      * ...add more providers here.
@@ -68,7 +44,50 @@ export const authOptions: NextAuthOptions = {
      *
      * @see https://next-auth.js.org/providers/github
      */
+    {
+      id: "anilist",
+      name: "Anilist",
+      type: "oauth",
+      authorization: {
+        url: "https://anilist.co/api/v2/oauth/authorize",
+        params: { scope: "", response_type: "code" },
+      },
+      token: "https://anilist.co/api/v2/oauth/token",
+      userinfo: `http:localhost:3000/api/anilist/userinfo`,
+      clientId: process.env.ANILIST_ID,
+      clientSecret: process.env.ANILIST_SECRET,
+      profile(profile: {
+        id: string;
+        username: string;
+        email: string;
+        image_url: string;
+      }) {
+        const data = {
+          id: profile.id,
+          name: profile.username,
+          email: profile.email,
+          image: profile.image_url,
+        };
+        return data;
+      },
+    },
   ],
+  session: {
+    strategy: "jwt",
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+      }
+       
+      return token;
+    },
+    session: ({ session, token }) => {
+      session.user.id = token.id as string;
+      return session;
+    },
+  },
 };
 
 /**
